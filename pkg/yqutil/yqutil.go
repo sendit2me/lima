@@ -64,3 +64,64 @@ func EvaluateExpression(expression string, content []byte) ([]byte, error) {
 	return out.Bytes(), nil
 
 }
+
+func EvaluateExpressionAllAtOnce(expression string, content [][]byte) ([]byte, error) {
+
+	tmpYAMLPath := make([]string, 0)
+	for i := range content { //assign
+		tmpYAMLFile, err := os.CreateTemp("", "lima-yq-*.yaml")
+		if err != nil {
+			return nil, err
+		}
+
+		tmpYAMLPath = append(tmpYAMLPath, tmpYAMLFile.Name())
+		defer os.RemoveAll(tmpYAMLPath[i])
+		err = os.WriteFile(tmpYAMLPath[i], content[i], 0o600)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	memory := logging.NewMemoryBackend(0)
+	backend := logging.AddModuleLevel(memory)
+	logging.SetBackend(backend)
+	yqlib.InitExpressionParser()
+
+	indent := 2
+	encoder := yqlib.NewYamlEncoder(indent, false, yqlib.ConfiguredYamlPreferences)
+	out := new(bytes.Buffer)
+	printer := yqlib.NewPrinter(encoder, yqlib.NewSinglePrinterWriter(out))
+
+	prefs := yqlib.ConfiguredYamlPreferences
+	prefs.EvaluateTogether = true
+	decoder := yqlib.NewYamlDecoder(prefs)
+
+	allAtOnceEvaluator := yqlib.NewAllAtOnceEvaluator()
+	err := allAtOnceEvaluator.EvaluateFiles(expression, tmpYAMLPath, printer, decoder)
+	if err != nil {
+		logger := logrus.StandardLogger()
+		for node := memory.Head(); node != nil; node = node.Next() {
+			entry := logrus.NewEntry(logger).WithTime(node.Record.Time)
+			prefix := fmt.Sprintf("[%s] ", node.Record.Module)
+			message := prefix + node.Record.Message()
+			switch node.Record.Level {
+			case logging.CRITICAL:
+				entry.Fatal(message)
+			case logging.ERROR:
+				entry.Error(message)
+			case logging.WARNING:
+				entry.Warn(message)
+			case logging.NOTICE:
+				entry.Info(message)
+			case logging.INFO:
+				entry.Info(message)
+			case logging.DEBUG:
+				entry.Debug(message)
+			}
+		}
+		return nil, err
+	}
+
+	return out.Bytes(), nil
+
+}

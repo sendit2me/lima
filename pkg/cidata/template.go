@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"io/ioutil"
 	"path"
 
 	"github.com/lima-vm/lima/pkg/iso9660util"
+	"github.com/lima-vm/lima/pkg/yqutil"
 
 	"github.com/containerd/containerd/identifiers"
 	"github.com/lima-vm/lima/pkg/textutil"
@@ -100,7 +102,7 @@ func ValidateTemplateArgs(args TemplateArgs) error {
 	return nil
 }
 
-func ExecuteTemplate(args TemplateArgs) ([]iso9660util.Entry, error) {
+func ExecuteTemplate(args TemplateArgs, cidatamerge map[string]string) ([]iso9660util.Entry, error) {
 	if err := ValidateTemplateArgs(args); err != nil {
 		return nil, err
 	}
@@ -121,6 +123,7 @@ func ExecuteTemplate(args TemplateArgs) ([]iso9660util.Entry, error) {
 		if !d.Type().IsRegular() {
 			return fmt.Errorf("got non-regular file %q", path)
 		}
+
 		templateB, err := fs.ReadFile(fsys, path)
 		if err != nil {
 			return err
@@ -129,6 +132,25 @@ func ExecuteTemplate(args TemplateArgs) ([]iso9660util.Entry, error) {
 		if err != nil {
 			return err
 		}
+
+		for _file, _url := range cidatamerge {
+			if _file == path {
+				bs, err := ioutil.ReadFile(_url)
+				if err != nil {
+					return err
+				}
+
+				output := make([][]byte, 2)
+				output[0] = b
+				output[1] = bs
+				_bb, err := yqutil.EvaluateExpressionAllAtOnce(". as $item ireduce ({}; . *+ $item)", output)
+				if err != nil {
+					return err
+				}
+				b = _bb
+			}
+		}
+
 		layout = append(layout, iso9660util.Entry{
 			Path:   path,
 			Reader: bytes.NewReader(b),

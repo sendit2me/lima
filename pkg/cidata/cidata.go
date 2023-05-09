@@ -266,7 +266,7 @@ func GenerateISO9660(instDir, name string, y *limayaml.LimaYAML, udpDNSLocalPort
 		return err
 	}
 
-	layout, err := ExecuteTemplate(args)
+	layout, err := ExecuteTemplate(args, y.CIData)
 	if err != nil {
 		return err
 	}
