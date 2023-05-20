@@ -1,3 +1,6 @@
 _output/
 _artifacts/
 lima.REJECTED.yaml
+userdata-templates/
+lima-build.sh
+lima-start.sh
