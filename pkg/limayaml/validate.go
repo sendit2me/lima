@@ -48,6 +48,17 @@ func Validate(y LimaYAML, warn bool) error {
 		return fmt.Errorf("field `arch` must be %q, %q, or %q; got %q", X8664, AARCH64, RISCV64, *y.Arch)
 	}
 
+	switch *y.VMType {
+	case QEMU:
+		// NOP
+	case VZ:
+		if !IsNativeArch(*y.Arch) {
+			return fmt.Errorf("field `arch` must be %q for VZ; got %q", NewArch(runtime.GOARCH), *y.Arch)
+		}
+	default:
+		return fmt.Errorf("field `vmType` must be %q or %q; got %q", QEMU, VZ, *y.VMType)
+	}
+
 	if len(y.Images) == 0 {
 		return errors.New("field `images` must be set")
 	}
@@ -153,9 +164,14 @@ func Validate(y LimaYAML, warn bool) error {
 	for i, p := range y.Provision {
 		switch p.Mode {
 		case ProvisionModeSystem, ProvisionModeUser, ProvisionModeBoot:
+			if p.SkipDefaultDependencyResolution != nil {
+				return fmt.Errorf("field `provision[%d].mode` cannot set skipDefaultDependencyResolution, only valid on scripts of type %q",
+					i, ProvisionModeDependency)
+			}
+		case ProvisionModeDependency:
 		default:
-			return fmt.Errorf("field `provision[%d].mode` must be either %q, %q, or %q",
-				i, ProvisionModeSystem, ProvisionModeUser, ProvisionModeBoot)
+			return fmt.Errorf("field `provision[%d].mode` must one of %q, %q, %q, or %q",
+				i, ProvisionModeSystem, ProvisionModeUser, ProvisionModeBoot, ProvisionModeDependency)
 		}
 	}
 	needsContainerdArchives := (y.Containerd.User != nil && *y.Containerd.User) || (y.Containerd.System != nil && *y.Containerd.System)
@@ -434,5 +450,8 @@ func warnExperimental(y LimaYAML) {
 	}
 	if y.Video.Display != nil && strings.Contains(*y.Video.Display, "vnc") {
 		logrus.Warn("`video.display: vnc` is experimental")
+	}
+	if y.Audio.Device != nil && *y.Audio.Device != "" {
+		logrus.Warn("`audio.device` is experimental")
 	}
 }

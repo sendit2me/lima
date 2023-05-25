@@ -51,6 +51,7 @@ func (l *LimaVzDriver) Validate() error {
 		"Arch",
 		"Images",
 		"CPUs",
+		"CPUType",
 		"Memory",
 		"Disk",
 		"Mounts",
@@ -73,6 +74,16 @@ func (l *LimaVzDriver) Validate() error {
 		"Audio",
 	); len(unknown) > 0 {
 		logrus.Warnf("Ignoring: vmType %s: %+v", *l.Yaml.VMType, unknown)
+	}
+
+	if !limayaml.IsNativeArch(*l.Yaml.Arch) {
+		return fmt.Errorf("unsupported arch: %q", *l.Yaml.Arch)
+	}
+
+	for k, v := range l.Yaml.CPUType {
+		if v != "" {
+			logrus.Warnf("Ignoring: vmType %s: cpuType[%q]: %q", *l.Yaml.VMType, k, v)
+		}
 	}
 
 	for i, image := range l.Yaml.Images {
